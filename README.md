@@ -1,182 +1,138 @@
 # Eject Drives
 
-A Python script to eject all external hard drives on macOS.
+**Safely eject all external drives on your Mac — from an interactive menu or a single command.**
+
+`ejectDrives.py` finds every external volume mounted under `/Volumes`, then ejects them — either through an interactive terminal menu or non-interactively for use inside shell scripts. When a normal eject is blocked (Spotlight, Finder holds, etc.), it can force-unmount and falls back to a Finder AppleScript eject. CB9Lib is bundled.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Requirements](#requirements)
+4. [Installation](#installation)
+5. [Alias Setup — Run From Anywhere](#alias-setup--run-from-anywhere)
+6. [Usage & Examples](#usage--examples)
+7. [How Drive Detection Works](#how-drive-detection-works)
+8. [Troubleshooting](#troubleshooting)
+9. [License / Copyright](#license--copyright)
+
+---
+
+## Overview
+
+One command cleanly disconnects every external drive before you unplug a dock or shut down — no dragging icons to the Trash, no "disk not ejected properly" warnings.
+
+---
+
+## Features
+
+- **Interactive TUI** — see all external drives; eject all `[A]`, one by number `[1-9]`, refresh `[R]`, or quit.
+- **Non-interactive CLI modes** — `all`, `force`, `list`, `help` for scripting and automation.
+- **Force eject** — `diskutil unmountDisk force` for stubborn volumes.
+- **Finder fallback** — AppleScript eject when `diskutil` refuses.
+- **Script-friendly exit codes** — `0` on full success, `1` if any drive fails.
+
+---
 
 ## Requirements
 
-- macOS
-- Python 3.12+
-- CB9Lib (located at `~/Documents/script/CB9Lib`)
+| Requirement | Notes |
+|-------------|-------|
+| **macOS** | Uses `diskutil` and Finder AppleScript — macOS only. |
+| **Python 3.12+** | CB9Lib is **bundled** — no separate install. |
+
+---
 
 ## Installation
 
-The script is ready to use. Ensure it has execute permissions:
-
 ```bash
-chmod +x ejectDrives.py
-```
-
-## Usage
-
-### Interactive Mode
-
-Run without arguments to launch the interactive menu:
-
-```bash
-python3 ejectDrives.py
-./ejectDrives.py
-```
-
-**Interactive Menu Options:**
-- `[A]` - Eject all external drives (with confirmation)
-- `[1-9]` - Eject a specific drive by number
-- `[R]` - Refresh the drive list
-- `[Q]` or `[Enter]` - Quit
-
-If a drive fails to eject, you'll be prompted to force eject.
-
-### Command-Line Mode
-
-#### Eject All Drives (No Prompts)
-
-```bash
-python3 ejectDrives.py all
-```
-
-Immediately ejects all external drives without any confirmation dialogs. Useful for scripts and automation.
-
-#### Force Eject All Drives
-
-```bash
-python3 ejectDrives.py force
-```
-
-Force ejects all external drives, bypassing processes that may be using them (like Spotlight indexing). Use this if `all` fails due to processes holding the drive.
-
-**Warning:** Force eject may cause data loss if files are being written. Ensure no active file operations before using.
-
-**Exit codes:**
-- `0` - All drives ejected successfully
-- `1` - One or more drives failed to eject
-
-#### List Drives
-
-```bash
+git clone <REPOSITORY_URL> Eject
+cd Eject
 python3 ejectDrives.py list
 ```
 
-Lists all connected external drives with their details (name, size, mount point, disk identifier) and exits.
+---
 
-#### Help
+## Alias Setup — Run From Anywhere
 
-```bash
-python3 ejectDrives.py help
-```
+Launch from any directory by typing `eject`.
 
-Shows usage information.
+### macOS (zsh or bash)
 
-## Examples
-
-### Quick Eject Before Unplugging
+Add to `~/.zshrc` (default on modern macOS) or `~/.bash_profile`:
 
 ```bash
-./ejectDrives.py all && echo "Safe to unplug drives"
+alias eject='python3 ~/path/to/Eject/ejectDrives.py'
 ```
 
-### Force Eject When Spotlight is Blocking
+Reload and run:
 
 ```bash
-# If regular eject fails due to mds_stores (Spotlight)
-./ejectDrives.py force
+source ~/.zshrc
+eject
 ```
 
-### Check Connected Drives
+**Alternative — symlink onto your `PATH`:**
 
 ```bash
-./ejectDrives.py list
+chmod +x ~/path/to/Eject/ejectDrives.py
+ln -s ~/path/to/Eject/ejectDrives.py /usr/local/bin/eject
 ```
 
-Output:
-```
-Found 2 external drive(s):
+> **Windows / Linux:** not applicable — this tool is macOS-specific.
 
-  1. Backup_Drive
-     Size: 2.0 TB
-     Mount: /Volumes/Backup_Drive
-     Disk: disk4
+---
 
-  2. USB_Stick
-     Size: 32.0 GB
-     Mount: /Volumes/USB_Stick
-     Disk: disk5
-```
-
-### Use in Shell Script
+## Usage & Examples
 
 ```bash
-#!/bin/bash
-# backup_and_eject.sh
-
-# Run backup
-rsync -av ~/Documents /Volumes/Backup_Drive/
-
-# Eject all drives when done (force if needed)
-~/Documents/script/ejectDrives/ejectDrives.py all || \
-~/Documents/script/ejectDrives/ejectDrives.py force
+python3 ejectDrives.py          # interactive menu
+./ejectDrives.py all            # eject all external drives (no prompts)
+./ejectDrives.py force          # force-unmount then eject (use if 'all' fails)
+./ejectDrives.py list           # list external drives and exit
+./ejectDrives.py help           # show help
 ```
 
-### Create an Alias
-
-Add to `~/.zshrc` or `~/.bashrc`:
+**In a shutdown script:**
 
 ```bash
-alias eject='~/Documents/script/ejectDrives/ejectDrives.py'
-alias ejectall='~/Documents/script/ejectDrives/ejectDrives.py all'
-alias ejectforce='~/Documents/script/ejectDrives/ejectDrives.py force'
+~/path/to/Eject/ejectDrives.py all || echo "Some drives failed to eject"
 ```
 
-Then use:
-```bash
-eject          # Interactive mode
-ejectall       # Eject all without prompts
-ejectforce     # Force eject all (bypasses Spotlight, etc.)
-```
+`all` exits `0` only when every external drive ejects successfully.
 
-## How It Works
+---
 
-1. Scans `/Volumes/` for mounted volumes
-2. Uses `diskutil info` to check each volume's properties
-3. Identifies external drives by checking:
-   - `Internal: No`
-   - `Protocol: USB, Thunderbolt, SATA, or FireWire`
-4. Uses `diskutil eject` to safely eject drives
-5. For force eject, uses `diskutil unmountDisk force` before ejecting
+## How Drive Detection Works
+
+A volume under `/Volumes` is treated as **external** when `diskutil info` reports any of:
+
+- `Internal: No`, or
+- `Protocol:` is `usb`, `thunderbolt`, `sata`, or `firewire`, or
+- `Removable Media:` is `Removable` / `Yes`.
+
+Volumes are deduplicated by their whole-disk identifier (e.g. `disk4`).
+
+---
 
 ## Troubleshooting
 
-### "Unmount was dissented by PID"
+| Symptom | Fix |
+|---------|-----|
+| "Resource busy" / eject fails | Close apps using the disk, then try `force`. |
+| Drive still won't eject | `./ejectDrives.py force` force-unmounts before ejecting. |
+| Internal disk listed | It shouldn't be — report the `diskutil info` output; detection keys on external/removable/protocol. |
 
-This error means a process is using the drive. Common causes:
-- **mds_stores (Spotlight)** - Indexing the drive
-- **Finder** - Open windows or previews
-- **Time Machine** - Backup in progress
-- **Applications** - Files open from the drive
+---
 
-**Solutions:**
-1. Use force eject: `./ejectDrives.py force`
-2. Close applications using the drive
-3. Disable Spotlight indexing for the drive (System Settings > Siri & Spotlight > Spotlight Privacy)
+## License / Copyright
 
-## Version History
+---
+**Version:** 1.2
+**Author:** Cloud Box 9 Inc.
+**Maintainer / Owner:** Cloud Box 9 Inc.
+**Last Updated:** Jul 5, 2026
 
-- **v1.2** - Added force eject option (`force` command, interactive prompt on failure)
-- **v1.1** - Added command-line arguments (`all`, `list`, `help`)
-- **v1.0** - Initial release with interactive menu
-
-## Author
-
-Cloud Box 9 Inc.
-
-## License
-
-Copyright 2026 Cloud Box 9 Inc. All rights reserved.
+Copyright © 2026 Cloud Box 9 Inc. All rights reserved.
